@@ -13,6 +13,12 @@ class ReservationSerializer(serializers.ModelSerializer):
                  'start_time', 'end_time', 'status', 'estimated_cost', 'created_at']
         read_only_fields = ['id', 'created_at']
 
+    def validate(self, data):
+        station = data.get('station')
+        if station and station.available_ports <= 0:
+            raise serializers.ValidationError("No available ports at this station")
+        return data
+
 class ReservationViewSet(viewsets.ModelViewSet):
     serializer_class = ReservationSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -21,4 +27,9 @@ class ReservationViewSet(viewsets.ModelViewSet):
         return Reservation.objects.filter(user=self.request.user).order_by('-created_at')
     
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        reservation = serializer.save(user=self.request.user)
+        # Reduce available ports when reservation is created
+        station = reservation.station
+        if station.available_ports > 0:
+            station.available_ports -= 1
+            station.save()
